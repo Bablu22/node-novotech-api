@@ -13,5 +13,5 @@
       "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     }
   ],
-  "rewrites": [{ "source": "/api/v1/(.*)", "destination": "/api/v1" }]
+  
 }
