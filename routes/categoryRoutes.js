@@ -7,7 +7,6 @@ import {
 } from "../controllers/categoryController.js";
 import express from "express";
 import { isAuthenticated } from "../middlewares/isAuthenticated.js";
-import catetgoryFileUpload from "../config/categoryUpload.js";
 import isAdmin from "../middlewares/isAdmin.js";
 
 const router = express.Router();
