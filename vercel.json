@@ -1,5 +1,4 @@
 {
-  "name": "ecommerce-shop-server",
   "version": 2,
   "builds": [
     {
@@ -7,21 +6,10 @@
       "use": "@vercel/node"
     }
   ],
-  "env": {
-    "NODE_ENV": "production"
-  },
   "routes": [
-    {
-      "handle": "filesystem"
-    },
     {
       "src": "/(.*)",
       "dest": "index.js"
     }
-  ],
-  "functions": {
-    "api/*.js": {
-      "runtime": "nodejs16"
-    }
-  }
+  ]
 }
