@@ -76,6 +76,27 @@ export const getCouponById = asyncHandler(async (req, res) => {
 });
 
 /**
+ * @desc Get a coupon by code
+ * @route GET /api/coupons/code/:code
+ * @access Public
+ */
+
+export const getCouponByCode = asyncHandler(async (req, res) => {
+  const code = req.params.code;
+  const coupon = await Coupon.findOne({ code });
+
+  if (!coupon) {
+    res.status(404);
+    throw new Error("Invalid coupon code");
+  }
+
+  res.status(200).json({
+    status: "success",
+    coupon,
+  });
+});
+
+/**
  * @desc Update a coupon
  * @route PUT /api/coupons/:id
  * @access Private/Admin

@@ -1,5 +1,6 @@
 import asyncHandler from "express-async-handler";
 import Brand from "../model/Brand.js";
+import Product from "../model/Product.js";
 
 // @desc create a new brand
 // @route POST /api/brands
@@ -47,9 +48,20 @@ export const getBrandById = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error("Brand not found");
   }
+  const products = await Product.find({ brand: brand._id }).populate([
+    {
+      path: "brand",
+      select: "name",
+    },
+    {
+      path: "category",
+      select: "name",
+    },
+  ]);
+
   res.status(200).json({
     status: "success",
-    brand,
+    brand: { ...brand._doc, products },
   });
 });
 
@@ -58,21 +70,22 @@ export const getBrandById = asyncHandler(async (req, res) => {
 // @access Private/Admin
 export const updateBrand = asyncHandler(async (req, res) => {
   const { name } = req.body;
+  console.log(req.body);
+  const brand = await Brand.findByIdAndUpdate(
+    req.params.id,
+    { name: name.toLowerCase() },
+    { new: true }
+  );
 
-  const brand = await Brand.findById(req.params.id);
   if (!brand) {
     res.status(404);
     throw new Error("Brand not found");
   }
 
-  brand.name = name.toLowerCase() || brand.name;
-
-  const updatedBrand = await brand.save();
-
   res.status(200).json({
     status: "success",
     message: "Brand updated successfully",
-    updatedBrand,
+    brand,
   });
 });
 

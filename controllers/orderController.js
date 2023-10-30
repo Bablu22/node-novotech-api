@@ -4,6 +4,7 @@ import User from "../model/User.js";
 import Coupon from "../model/Coupon.js";
 import Stripe from "stripe";
 import dotenv from "dotenv";
+import Product from "../model/Product.js";
 dotenv.config();
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -25,7 +26,7 @@ export const createOrder = asyncHandler(async (req, res) => {
   }
 
   // Get the payload (orderItems, totalPrice)
-  const { orderItems } = req.body;
+  const { orderItems, totalPrice, shippingAddress, paymentMethod } = req.body;
 
   // Check if the order is not empty
   if (!Array.isArray(orderItems) || orderItems.length === 0) {
@@ -33,79 +34,77 @@ export const createOrder = asyncHandler(async (req, res) => {
     throw new Error("No order items");
   }
 
-  // apply the discount coupon if any
-  const { coupon } = req.query;
+  if (paymentMethod === "cash") {
+    // Create the order and save it to the database
+    const order = await Order.create({
+      user: req.user,
+      orderItems,
+      shippingAddress,
+      totalPrice,
+      paymentMethod: "cash on delivery",
+    });
 
-  // If a coupon code is provided, calculate the discount
-
-  let totalPrice = 0;
-  let discount = 0;
-  let couponFound = null;
-
-  if (coupon) {
-    couponFound = await Coupon.findOne({ code: coupon.toUpperCase() });
-    console.log(couponFound);
-
-    if (!couponFound) {
-      res.status(400);
-      throw new Error("Coupon not found");
+    // calculation products quantity and total sold
+    const orderDone = await Order.findById(order._id);
+    for (const item of orderDone.orderItems) {
+      const product = await Product.findById(item.productId);
+      if (product) {
+        product.totalSold += item.quantity;
+        await product.save();
+      }
     }
 
-    if (couponFound.IsExpired) {
-      res.status(400);
-      throw new Error("Coupon is Expired");
+    // Update user's orders
+    const user = await User.findById(order.user);
+    if (user) {
+      user.orders.push(order._id);
+      await user.save();
     }
-
-    // Calculate the total price without considering the discount
-    totalPrice = orderItems.reduce((acc, item) => {
-      return acc + item.price * item.quantity;
-    }, 0);
-
-    // Calculate the discount and update the totalPrice
-    discount = (totalPrice * couponFound.discount) / 100;
-    totalPrice = totalPrice - discount;
-  } else {
-    // If no coupon is applied, calculate the total price without discount
-    totalPrice = orderItems.reduce((acc, item) => {
-      return acc + item.price * item.quantity;
-    }, 0);
+    return res.json({
+      success: true,
+      message: "Order created",
+      order,
+      success_url: `http://localhost:5173/order/success/${order._id}`,
+      type: "cash",
+    });
   }
 
   // Create the order and save it to the database
-  const order = await Order.create({
-    user: req.user,
-    orderItems,
-    shippingAddress: user.shippingAddress,
-    totalPrice,
-    coupon: couponFound ? couponFound._id : null,
-  });
+  else {
+    const orderStripe = await Order.create({
+      user: req.user,
+      orderItems,
+      shippingAddress,
+      totalPrice,
+    });
 
-  // Make payment (Stripe)
-  const session = await stripe.checkout.sessions.create({
-    line_items: orderItems.map((item) => {
-      return {
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: item.name,
-            description: item.description,
+    // Make payment (Stripe)
+    const session = await stripe.checkout.sessions.create({
+      line_items: orderItems.map((item) => {
+        return {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: item.name,
+              description: item.description,
+            },
+            unit_amount: item.price * 100,
           },
-          unit_amount: item.price * 100, // Convert the total to cents
-        },
-        quantity: item.quantity,
-      };
-    }),
-    metadata: {
-      order_id: JSON.stringify(order._id),
-      total_price: totalPrice * 100,
-    },
-    mode: "payment",
-    success_url: `http://localhost:3000/success`,
-    cancel_url: `http://localhost:3000/cancel`,
-  });
+          quantity: item.quantity,
+        };
+      }),
+      metadata: {
+        order_id: JSON.stringify(orderStripe._id),
+        total_price: totalPrice * 100,
+      },
+      mode: "payment",
+      success_url: `http://localhost:5173/order/success/${orderStripe._id}`,
+      cancel_url: `http://localhost:3000/cancel`,
+    });
 
-  // Redirect the user to the Stripe checkout page
-  res.send({ url: session.url });
+    // Redirect the user to the Stripe checkout page
+    res.send({ url: session.url });
+  }
 });
 
 /*
@@ -113,19 +112,33 @@ export const createOrder = asyncHandler(async (req, res) => {
 @route GET /api/orders
 @access Private
 */
-
 export const getOrders = asyncHandler(async (req, res) => {
-  const orders = await Order.find()
-    .populate({
-      path: "user",
-      select: "name email",
-    })
-    .populate({ path: "coupon", select: "code discount" });
-  res.json({
-    success: true,
-    message: "All orders",
-    orders,
-  });
+  // Search orders by orderNumber
+  const query = {};
+  if (req.query.orderNumber) {
+    query.orderNumber = { $regex: new RegExp(req.query.orderNumber, "i") };
+  }
+
+  try {
+    const orders = await Order.find(query)
+      .populate({
+        path: "user",
+        select: "name email",
+      })
+      .populate({ path: "coupon", select: "code discount" });
+
+    res.json({
+      success: true,
+      message: "All orders",
+      orders,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching orders",
+      error: error.message,
+    });
+  }
 });
 
 /*
@@ -175,29 +188,16 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
  */
 
 export const getOrderStats = asyncHandler(async (req, res) => {
-  const orders = await Order.aggregate([
-    {
-      $group: {
-        _id: null,
-        minimumSale: {
-          $min: "$totalPrice",
-        },
-        totalSales: {
-          $sum: "$totalPrice",
-        },
-        maxSale: {
-          $max: "$totalPrice",
-        },
-        avgSale: {
-          $avg: "$totalPrice",
-        },
-      },
-    },
-  ]);
-
   const date = new Date();
   const today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const saleToday = await Order.aggregate([
+  const yesterday = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate() - 1
+  );
+
+  // Calculate sales for today
+  const todaySales = await Order.aggregate([
     {
       $match: {
         createdAt: {
@@ -215,18 +215,13 @@ export const getOrderStats = asyncHandler(async (req, res) => {
     },
   ]);
 
-  const lastMonth = new Date(
-    date.getFullYear(),
-    date.getMonth() - 1,
-    date.getDate()
-  );
-
-  const saleLastMonth = await Order.aggregate([
+  // Calculate sales for yesterday
+  const yesterdaySales = await Order.aggregate([
     {
       $match: {
         createdAt: {
-          $gte: lastMonth,
-          $lte: today,
+          $gte: yesterday,
+          $lt: today, // Sales between yesterday and today
         },
       },
     },
@@ -240,11 +235,92 @@ export const getOrderStats = asyncHandler(async (req, res) => {
     },
   ]);
 
+  // Calculate the percentage change
+  const percentageChange =
+    (todaySales[0]?.totalSales - yesterdaySales[0]?.totalSales) /
+    yesterdaySales[0]?.totalSales;
+
+  // Calculate sales for the last month
+  const lastMonth = new Date(
+    date.getFullYear(),
+    date.getMonth() - 1,
+    date.getDate()
+  );
+  const lastMonthSales = await Order.aggregate([
+    {
+      $match: {
+        createdAt: {
+          $gte: lastMonth,
+          $lt: today, // Sales between the beginning of the last month and today
+        },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        totalSales: {
+          $sum: "$totalPrice",
+        },
+      },
+    },
+  ]);
+
+  // total sales
+  const totalSales = await Order.aggregate([
+    {
+      $group: {
+        _id: null,
+        totalSales: {
+          $sum: "$totalPrice",
+        },
+      },
+    },
+  ]);
+
+  const avgSales = await Order.aggregate([
+    {
+      $group: {
+        _id: null,
+        avgSales: {
+          $avg: "$totalPrice",
+        },
+      },
+    },
+  ]);
+
+  const productSales = await Order.aggregate([
+    {
+      $unwind: "$orderItems",
+    },
+    {
+      $group: {
+        _id: "$orderItems.productId",
+        totalSales: {
+          $sum: "$orderItems.price",
+        },
+        count: {
+          $sum: "$orderItems.quantity",
+        },
+        name: {
+          $first: "$orderItems.name",
+        },
+        // show product sales percentage is good or not compare with oters
+        avgSales: {
+          $avg: "$orderItems.price",
+        },
+      },
+    },
+  ]);
+
   res.json({
     success: true,
     message: "Order stats",
-    orders,
-    saleToday,
-    saleLastMonth,
+    totalSales: totalSales[0]?.totalSales || 0,
+    avgSales: avgSales[0]?.avgSales || 0,
+    todaySales: todaySales[0]?.totalSales || 0,
+    yesterdaySales: yesterdaySales[0]?.totalSales || 0,
+    lastMonthSales: lastMonthSales[0]?.totalSales || 0,
+    percentageChange: isNaN(percentageChange) ? null : percentageChange * 100,
+    productSales,
   });
 });

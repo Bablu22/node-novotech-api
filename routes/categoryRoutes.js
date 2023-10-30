@@ -12,13 +12,7 @@ import isAdmin from "../middlewares/isAdmin.js";
 
 const router = express.Router();
 
-router.post(
-  "/",
-  isAuthenticated,
-  isAdmin,
-  catetgoryFileUpload.single("file"),
-  createCategory
-);
+router.post("/", isAuthenticated, isAdmin, createCategory);
 router.get("/", getCategories);
 router.get("/:id", getCategoryById);
 router.put("/:id", isAuthenticated, isAdmin, updateCategory);

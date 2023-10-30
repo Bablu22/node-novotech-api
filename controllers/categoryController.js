@@ -1,11 +1,12 @@
 import Category from "../model/Category.js";
 import asyncHandler from "express-async-handler";
+import Product from "../model/Product.js";
 
 // @desc create a new category
 // @route POST /api/categories
 // @access Private/Admin
 export const createCategory = asyncHandler(async (req, res) => {
-  const { name } = req.body;
+  const { name, image } = req.body;
 
   const categoryName = name.toLowerCase();
 
@@ -17,7 +18,7 @@ export const createCategory = asyncHandler(async (req, res) => {
 
   const category = await Category.create({
     name: categoryName,
-    image: req?.file?.path,
+    image,
     user: req.user,
   });
 
@@ -33,6 +34,7 @@ export const createCategory = asyncHandler(async (req, res) => {
 // @access Public
 export const getCategories = asyncHandler(async (req, res) => {
   const categories = await Category.find({});
+
   res.status(200).json({
     status: "success",
     categories,
@@ -48,9 +50,22 @@ export const getCategoryById = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error("Category not found");
   }
+  const products = await Product.find({ category: category._id }).populate([
+    {
+      path: "brand",
+      select: "name",
+    },
+    {
+      path: "category",
+      select: "name",
+    },
+  ]);
   res.status(200).json({
     status: "success",
-    category,
+    category: {
+      ...category._doc,
+      products,
+    },
   });
 });
 

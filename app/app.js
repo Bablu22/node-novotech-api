@@ -20,13 +20,14 @@ import colorRoutes from "../routes/colorRoutes.js";
 import reviewRoutes from "../routes/reviewRoutes.js";
 import orderRoutes from "../routes/orderRoutes.js";
 import couponRoutes from "../routes/couponRoutes.js";
+import validationErrorMiddleware from "../middlewares/validationError.js";
 
 dotenv.config();
 dbConnect();
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+
 app.use(express.urlencoded({ extended: true }));
 
 // Create a Stripe instance
@@ -57,7 +58,6 @@ app.post(
         const totalPrice = session.metadata.totalPrice;
         const currency = session.currency;
 
-        // Update the order in your database with payment details
         const updatedOrder = await Order.findOneAndUpdate(
           { _id: JSON.parse(order_id) },
           {
@@ -80,7 +80,6 @@ app.post(
         for (const item of order.orderItems) {
           const product = await Product.findById(item.productId);
           if (product) {
-            product.quantity -= item.quantity;
             product.totalSold += item.quantity;
             await product.save();
           }
@@ -104,6 +103,7 @@ app.post(
   }
 );
 
+app.use(express.json());
 // Routes
 app.use("/api/v1/users/", userRoute);
 app.use("/api/v1/products/", productRoutes);
@@ -116,6 +116,7 @@ app.use("/api/v1/coupons/", couponRoutes);
 
 // Error handling
 app.use(notFound);
+app.use(validationErrorMiddleware);
 app.use(globalErrorHandler);
 
 export default app;

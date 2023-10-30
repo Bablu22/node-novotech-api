@@ -14,7 +14,7 @@ export const registerUser = asyncHandler(async (req, res) => {
   // check if user already exists
   const userExists = await User.findOne({ email });
   if (userExists) {
-    throw new Error("User already exists");
+    throw new Error("This email is already used");
   }
 
   // Do password hashing
@@ -38,7 +38,9 @@ export const registerUser = asyncHandler(async (req, res) => {
         name: user.name,
         email: user.email,
         isAdmin: user.isAdmin,
+        type: user.type,
       },
+      token: generateToken(user._id),
     });
   } else {
     throw new Error("Invalid user data");
@@ -72,6 +74,7 @@ export const loginUser = asyncHandler(async (req, res) => {
       name: user.name,
       email: user.email,
       isAdmin: user.isAdmin,
+      type: user.type,
     },
     token: generateToken(user._id),
   });
@@ -108,19 +111,23 @@ export const updateUserShippingAddress = asyncHandler(async (req, res) => {
     province,
   } = req.body;
 
+  const exestingUser = await User.findById(req.user);
   const user = await User.findByIdAndUpdate(
     req.user,
     {
-      shippingAddress: {
-        firstName,
-        lastName,
-        address,
-        city,
-        country,
-        postalCode,
-        phone,
-        province,
-      },
+      shippingAddress: [
+        ...exestingUser.shippingAddress,
+        {
+          firstName,
+          lastName,
+          address,
+          city,
+          country,
+          postalCode,
+          phone,
+          province,
+        },
+      ],
       hasShippingAddress: true,
     },
     { new: true }
@@ -129,6 +136,124 @@ export const updateUserShippingAddress = asyncHandler(async (req, res) => {
   res.status(200).json({
     status: "success",
     message: "Shipping address updated successfully",
+    user,
+  });
+});
+
+// user shipping address delete
+// @route DELETE /api/v1/users/delete/shipping/:id
+// @access Private
+
+export const deleteUserShippingAddress = asyncHandler(async (req, res) => {
+  // check shpping address is exist or not with id
+  const userShippingAddress = await User.findById(req.user).select(
+    "shippingAddress"
+  );
+
+  const shippingAddress = userShippingAddress.shippingAddress.find(
+    (address) => address._id.toString() === req.params.id
+  );
+
+  if (!shippingAddress) {
+    throw new Error("Shipping address not found");
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user,
+    {
+      $pull: { shippingAddress: { _id: req.params.id } },
+    },
+    { new: true }
+  );
+
+  if (user.shippingAddress.length === 0) {
+    user.hasShippingAddress = false;
+  }
+
+  res.status(200).json({
+    status: "success",
+    message: "Shipping address deleted successfully",
+    user,
+  });
+});
+
+// @desc Update user profile
+// @route PUT /api/v1/users/profile
+// @access Private
+
+export const updateUserProfile = asyncHandler(async (req, res) => {
+  const { name, email, password } = req.body;
+
+  // check if user is registered
+  const user = await User.findById(req.user);
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  // check if user is registered
+  const userExists = await User.findOne({ email });
+  if (userExists && userExists._id.toString() !== req.user.toString()) {
+    throw new Error("This email is already used");
+  }
+
+  // Do password hashing
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  // update user
+  const updatedUser = await User.findByIdAndUpdate(
+    req.user,
+    {
+      name,
+      email,
+      password: hashedPassword,
+    },
+    { new: true }
+  ).select("-password");
+
+  res.status(200).json({
+    status: "success",
+    message: "User updated successfully",
+    user: updatedUser,
+  });
+});
+
+// get all users
+// @route GET /api/v1/users
+// @access Private/Admin
+
+export const getAllUsers = asyncHandler(async (req, res) => {
+  // search user by email
+  const query = {};
+  if (req.query.email) {
+    query.email = {
+      $regex: req.query.email,
+      $options: "i",
+    };
+  }
+  const users = await User.find(query).select("-password");
+  res.status(200).json({
+    status: "success",
+    users,
+  });
+});
+
+// update user type
+// @route PUT /api/v1/users/update/:id
+// @access Private/Admin
+
+export const updateUserType = asyncHandler(async (req, res) => {
+  const user = await User.findByIdAndUpdate(
+    req.params.id,
+    {
+      type: req.body.type,
+    },
+    { new: true }
+  );
+
+  res.status(200).json({
+    status: "success",
+    message: "User type updated successfully",
     user,
   });
 });

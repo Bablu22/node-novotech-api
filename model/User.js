@@ -10,16 +10,19 @@ const userSchema = new schema(
     wishList: [{ type: schema.Types.ObjectId, ref: "WishList" }],
     isAdmin: { type: Boolean, default: false },
     hasShippingAddress: { type: Boolean, default: false },
-    shippingAddress: {
-      firstName: { type: String },
-      lastName: { type: String },
-      address: { type: String },
-      city: { type: String },
-      country: { type: String },
-      postalCode: { type: String },
-      province: { type: String },
-      phone: { type: String },
-    },
+    type: { type: String, default: "user", enum: ["user", "manager", "admin"] },
+    shippingAddress: [
+      {
+        firstName: { type: String },
+        lastName: { type: String },
+        address: { type: String },
+        city: { type: String },
+        country: { type: String },
+        postalCode: { type: String },
+        province: { type: String },
+        phone: { type: String },
+      },
+    ],
   },
   { timestamps: true }
 );

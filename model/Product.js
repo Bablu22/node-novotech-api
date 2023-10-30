@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { Schema } from "mongoose";
 const schems = mongoose.Schema;
 
 const productSchema = new schems(
@@ -14,11 +14,12 @@ const productSchema = new schems(
       required: true,
     },
     brand: {
-      type: String,
+      type: Schema.Types.ObjectId,
       required: true,
+      ref: "Brand",
     },
     category: {
-      type: String,
+      type: Schema.Types.ObjectId,
       required: true,
       ref: "Category",
     },
@@ -80,6 +81,11 @@ productSchema.virtual("averageRating").get(function () {
     return totalRating / this.reviews.length;
   }
   return totalRating;
+});
+
+// quantity left of each product
+productSchema.virtual("quantityLeft").get(function () {
+  return this.quantity - this.totalSold;
 });
 
 const Product = mongoose.model("Product", productSchema);

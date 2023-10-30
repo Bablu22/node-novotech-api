@@ -8,8 +8,17 @@ import Brand from "../model/Brand.js";
 // @access Private/Admin
 
 export const createProduct = asyncHandler(async (req, res) => {
-  const { name, description, brand, category, sizes, colors, price, quantity } =
-    req.body;
+  const {
+    name,
+    description,
+    brand,
+    category,
+    images,
+    sizes,
+    colors,
+    price,
+    quantity,
+  } = req.body;
 
   const productExists = await Product.findOne({ name });
   if (productExists) {
@@ -17,44 +26,31 @@ export const createProduct = asyncHandler(async (req, res) => {
     throw new Error("Product already exists");
   }
 
-  // find category by name
-  const categoryName = category.toLowerCase();
-  const categoryFound = await Category.findOne({ name: categoryName });
+  const categoryFound = await Category.findById(category);
   if (!categoryFound) {
     res.status(404);
     throw new Error("Category not found! Please create a category first");
   }
 
   // find the brand by name
-  const brandName = brand.toLowerCase();
-  const brandFound = await Brand.findOne({ name: brandName });
+  const brandFound = await Brand.findById(brand);
   if (!brandFound) {
     res.status(404);
     throw new Error("Brand not found! Please create a brand first");
   }
 
-  const convertedImgs = req.files ? req.files.map((file) => file?.path) : null;
-
   const data = await Product.create({
     name,
     description,
-    brand,
-    category,
-    sizes,
-    colors,
+    brand: brandFound._id,
+    category: categoryFound._id,
+    sizes: JSON.parse(sizes),
+    colors: JSON.parse(colors),
     price,
     quantity,
     user: req.user,
-    images: convertedImgs,
+    images: JSON.parse(images),
   });
-
-  // store the product in that category
-  categoryFound.products.push(data._id);
-  await categoryFound.save();
-
-  // store the product in that brand
-  brandFound.products.push(data._id);
-  await brandFound.save();
 
   if (data) {
     res.status(201).json({
@@ -77,22 +73,30 @@ export const getProducts = asyncHandler(async (req, res) => {
 
   // Search by name
   if (req.query.name) {
-    query.name = { $regex: req.query.name, $options: "i" };
+    query.name = { $regex: new RegExp(req.query.name, "i") };
   }
 
-  // Search by category
+  // Search by category (assuming you're searching by category name)
   if (req.query.category) {
-    query.category = { $regex: req.query.category, $options: "i" };
+    const category = req.query.category;
+    const categoryId = await Category.findOne({ name: category }).select("_id");
+    if (categoryId) {
+      query.category = categoryId;
+    }
   }
 
-  // Search by brand
+  // Search by brand (assuming you're searching by brand name)
   if (req.query.brand) {
-    query.brand = { $regex: req.query.brand, $options: "i" };
+    const brand = req.query.brand;
+    const brandId = await Brand.findOne({ name: brand }).select("_id");
+    if (brandId) {
+      query.brand = brandId;
+    }
   }
 
-  // Search by color
+  // Search by color (exact match)
   if (req.query.color) {
-    query.colors = { $regex: req.query.color, $options: "i" };
+    query.colors = req.query.color;
   }
 
   // Search by price
@@ -111,7 +115,11 @@ export const getProducts = asyncHandler(async (req, res) => {
   const products = await Product.find(query)
     .skip(skip)
     .limit(pageSize)
-    .populate("reviews")
+    .populate([
+      { path: "category", select: "name" },
+      { path: "brand", select: "name" },
+      { path: "reviews", select: "rating" },
+    ])
     .exec();
 
   const pagination = {};
@@ -143,12 +151,27 @@ export const getProducts = asyncHandler(async (req, res) => {
 // @access Public
 
 export const getProductById = asyncHandler(async (req, res) => {
-  const product = await Product.findById(req.params.id).populate("reviews");
+  const product = await Product.findById(req.params.id).populate({
+    path: "reviews",
+    populate: {
+      path: "user",
+    },
+  });
+
+  const category = await Category.findOne({ _id: product.category }).select(
+    "name"
+  );
+  const brand = await Brand.findOne({ _id: product.brand }).select("name");
+  const rating =
+    product.reviews.reduce((acc, item) => item.rating + acc, 0) /
+    product.reviews.length;
+
+  const inStock = product.quantity > 0 ? true : false;
 
   if (product) {
     res.status(200).json({
       status: "success",
-      product,
+      product: { ...product._doc, category, brand, rating, inStock },
     });
   } else {
     res.status(404);
@@ -161,17 +184,14 @@ export const getProductById = asyncHandler(async (req, res) => {
 // @access Private/Admin
 
 export const updateProduct = asyncHandler(async (req, res) => {
-  const {
-    name,
-    description,
-    brand,
-    category,
-    sizes,
-    colors,
-    price,
-    quantity,
-    images,
-  } = req.body;
+  const { name, description, brand, category, sizes, colors, price, quantity } =
+    req.body;
+
+  // Check if images are included in the request
+  let imagesData = {};
+  if (req.body.images) {
+    imagesData = { images: JSON.parse(req.body.images) };
+  }
 
   const product = await Product.findByIdAndUpdate(
     req.params.id,
@@ -180,12 +200,12 @@ export const updateProduct = asyncHandler(async (req, res) => {
       description,
       brand,
       category,
-      sizes,
-      colors,
+      sizes: JSON.parse(sizes),
+      colors: JSON.parse(colors),
       price,
       quantity,
-      images,
       user: req.user,
+      ...imagesData, // Merge the images data if it's provided in the request
     },
     { new: true }
   );
