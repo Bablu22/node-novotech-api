@@ -64,7 +64,7 @@ export const createOrder = asyncHandler(async (req, res) => {
       success: true,
       message: "Order created",
       order,
-      success_url: `http://localhost:5173/order/success/${order._id}`,
+      success_url: `${process.env.CLIENT_URL}/order/success/${order._id}`,
       type: "cash",
     });
   }
@@ -98,8 +98,8 @@ export const createOrder = asyncHandler(async (req, res) => {
         total_price: totalPrice * 100,
       },
       mode: "payment",
-      success_url: `http://localhost:5173/order/success/${orderStripe._id}`,
-      cancel_url: `http://localhost:3000/cancel`,
+      success_url: `${process.env.CLIENT_URL}/order/success/${orderStripe._id}`,
+      cancel_url: `${process.env.CLIENT_URL}/cancel`,
     });
 
     // Redirect the user to the Stripe checkout page
