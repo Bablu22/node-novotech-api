@@ -114,6 +114,10 @@ app.use("/api/v1/reviews/", reviewRoutes);
 app.use("/api/v1/orders/", orderRoutes);
 app.use("/api/v1/coupons/", couponRoutes);
 
+app.get("/", (req, res) => {
+  res.send("API is running...");
+});
+
 // Error handling
 app.use(notFound);
 app.use(validationErrorMiddleware);
