@@ -98,7 +98,7 @@ export const createOrder = asyncHandler(async (req, res) => {
         total_price: totalPrice * 100,
       },
       mode: "payment",
-      success_url: `${process.env.CLIENT_URL}/order/success/${orderStripe._id}`,
+     success_url: `${process.env.CLIENT_URL}/order/success/${orderStripe._id}`,
       cancel_url: `${process.env.CLIENT_URL}/cancel`,
     });
 
