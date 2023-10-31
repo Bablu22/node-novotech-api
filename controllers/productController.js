@@ -201,7 +201,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
       price,
       quantity,
       user: req.user,
-     images
+      images: JSON.parse(images),
     },
     { new: true }
   );
