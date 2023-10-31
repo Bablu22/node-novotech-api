@@ -188,9 +188,9 @@ export const updateProduct = asyncHandler(async (req, res) => {
     req.body;
 
   // Check if images are included in the request
-  let imagesData = {};
+   let imagesData = [];
   if (req.body.images) {
-    imagesData = { images: JSON.parse(req.body.images) };
+    imagesData.push(...JSON.parse(req.body.images));
   }
 
   const product = await Product.findByIdAndUpdate(
@@ -205,7 +205,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
       price,
       quantity,
       user: req.user,
-      ...imagesData, // Merge the images data if it's provided in the request
+     images: imagesData,
     },
     { new: true }
   );
