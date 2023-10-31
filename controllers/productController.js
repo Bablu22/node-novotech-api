@@ -184,14 +184,10 @@ export const getProductById = asyncHandler(async (req, res) => {
 // @access Private/Admin
 
 export const updateProduct = asyncHandler(async (req, res) => {
-  const { name, description, brand, category, sizes, colors, price, quantity } =
+  const { name, description, brand, category, sizes, colors, price, quantity,images } =
     req.body;
 
-  // Check if images are included in the request
-   let imagesData = [];
-  if (req.body.images) {
-    imagesData.push(...JSON.parse(req.body.images));
-  }
+ 
 
   const product = await Product.findByIdAndUpdate(
     req.params.id,
@@ -205,7 +201,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
       price,
       quantity,
       user: req.user,
-     images: imagesData,
+     images
     },
     { new: true }
   );
