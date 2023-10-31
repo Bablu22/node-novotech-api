@@ -35,7 +35,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Replace this with your actual Stripe webhook secret
 const endpointSecret =
-  "whsec_b0d23e98565be9eefc29318c5089b31baceca1ee801e051e9745203bc0a3c8c5";
+  "whsec_fuqcPwCBo9zoj6hFkxO5m7MV00lFkpGh";
 
 app.post(
   "/webhook",
